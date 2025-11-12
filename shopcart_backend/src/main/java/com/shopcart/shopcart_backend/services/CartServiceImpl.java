@@ -1,17 +1,20 @@
 package com.shopcart.shopcart_backend.services;
 
 import com.shopcart.shopcart_backend.dto.CartItemResponseDTO;
+import com.shopcart.shopcart_backend.dto.ProductResponseDTO;
 import com.shopcart.shopcart_backend.entities.*;
 import com.shopcart.shopcart_backend.exception.BadRequestException;
 import com.shopcart.shopcart_backend.exception.ResourceNotFoundException;
 import com.shopcart.shopcart_backend.repositories.*;
 
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.util.Date;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
+
 
 @Service
 public class CartServiceImpl implements CartService {
@@ -19,9 +22,10 @@ public class CartServiceImpl implements CartService {
     @Autowired private UserRepository userRepository;
     @Autowired private ProductRepository productRepository;
     @Autowired private CartItemRepository cartItemRepository;
-
-    @Override
-    public CartItemResponseDTO addToCart(String email, Long productId, int quantity) {
+    @Autowired private DiscountRepository discountRepository;  // ✅ You missed this
+    @Autowired private ProductService productService;
+@Override
+        public CartItemResponseDTO addToCart(String email, Long productId, int quantity) {
         if (quantity <= 0) {
             throw new BadRequestException("Quantity must be at least 1");
         }
@@ -42,18 +46,22 @@ public class CartServiceImpl implements CartService {
                 .quantity(quantity)
                 .build();
 
-        return CartItemResponseDTO.from(cartItemRepository.save(cartItem));
+        CartItem savedItem = cartItemRepository.save(cartItem);
+
+        // ✅ Pass productService to correctly calculate effective price
+        return CartItemResponseDTO.from(savedItem, productService);
     }
 
-    @Override
-    public List<CartItemResponseDTO> getCartItemsByUser(String email) {
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + email));
+@Override
+public List<CartItemResponseDTO> getCartItemsByUser(String email) {
+    User user = userRepository.findByEmail(email)
+            .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + email));
 
-        return cartItemRepository.findByUser(user).stream()
-                .map(CartItemResponseDTO::from)
-                .collect(Collectors.toList());
-    }
+    return cartItemRepository.findByUser(user).stream()
+            .map(cartItem -> CartItemResponseDTO.from(cartItem, productService)) // ✅ use helper
+            .collect(Collectors.toList());
+}
+
 
     @Override
     public void removeFromCart(String email, Long cartItemId) {
@@ -70,13 +78,19 @@ public class CartServiceImpl implements CartService {
         cartItemRepository.delete(item);
     }
 
-    @Override
-    public double getTotalCartValue(String email) {
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + email));
+   @Override
+public double getTotalCartValue(String email) {
+    User user = userRepository.findByEmail(email)
+            .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + email));
 
-        return cartItemRepository.findByUser(user).stream()
-                .mapToDouble(item -> item.getProduct().getPrice() * item.getQuantity())
-                .sum();
-    }
+    Date now = new Date();
+
+    return cartItemRepository.findByUser(user).stream()
+            .mapToDouble(item -> {
+                double effectivePrice = productService.getEffectivePrice(item.getProduct());
+                return effectivePrice * item.getQuantity();
+            })
+            .sum();
+}
+
 }

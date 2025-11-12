@@ -5,27 +5,109 @@ import { AuthContext } from "../context/AuthContext";
 const AdminProducts = () => {
   const { token, role } = useContext(AuthContext);
   const [products, setProducts] = useState([]);
-  const [form, setForm] = useState({
-    name: "",
-    description: "",
-    price: "",
-    stock: "",
-  });
+  const [form, setForm] = useState({ name: "", description: "", price: "", stock: "" });
   const [imageFile, setImageFile] = useState(null);
   const [editingId, setEditingId] = useState(null);
 
+  // ✅ fetchProducts defined normally
+  const fetchProducts = async () => {
+    try {
+      const res = await axios.get("http://localhost:8080/api/products/my-products", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setProducts(res.data);
+    } catch (error) {
+      console.error("Error fetching admin products:", error);
+    }
+  };
+
+  // ✅ useEffect at top level
   useEffect(() => {
     fetchProducts();
   }, []);
 
-  const fetchProducts = async () => {
-  try {
-    const res = await axios.get("http://localhost:8080/api/products/my-products", {
-      headers: { Authorization: `Bearer ${token}` },
+
+
+
+  const startDiscount = (product) => {
+    setDiscountForm({
+      productId: product.id,
+      percentage: product.discount?.percentage || "",
+      endDate: product.discount?.endDate?.split("T")[0] || "",
+      isUpdate: !!product.discount?.active,
     });
-    setProducts(res.data);
+  };
+  const [discountForm, setDiscountForm] = useState({
+    productId: null,
+    percentage: "",
+    endDate: "",
+    isUpdate: false,
+  });
+
+  const saveDiscount = async () => {
+    const { productId, percentage, endDate, isUpdate } = discountForm;
+    if (!percentage || !endDate) return alert("Fill all fields");
+
+    const percent = parseFloat(percentage);
+    if (percent < 0 || percent > 100) return alert("Discount must be 0-100%");
+    if (new Date(endDate) < new Date()) return alert("End date cannot be in the past");
+
+    try {
+      if (isUpdate) {
+        await axios.put(
+          `http://localhost:8080/api/products/${productId}/discount`,
+          null, // body is null because backend expects query params
+          {
+            headers: { Authorization: `Bearer ${token}` },
+            params: { percentage: percent, endDate } // ✅ send as query params
+          }
+        );
+        alert("Discount updated!");
+      } else {
+        await axios.post(
+          `http://localhost:8080/api/products/${productId}/discount`,
+          null,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+            params: { percentage: percent, endDate } // ✅ send as query params
+          }
+        );
+        alert("Discount added!");
+      }
+      setDiscountForm({ productId: null, percentage: "", endDate: "", isUpdate: false });
+      fetchProducts();
+    } catch (error) {
+      console.error(error);
+      alert(error.response?.data?.message || "Error saving discount");
+    }
+  };
+
+
+
+ const handleRemoveDiscount = async (productId) => {
+  if (!window.confirm("Remove discount from this product?")) return;
+
+  try {
+    await axios.delete(
+      `http://localhost:8080/api/products/${productId}/discount`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+
+    alert("Discount removed!");
+
+    // ✅ Update products state locally instead of waiting for refetch
+    setProducts(products.map(p => 
+      p.id === productId ? { ...p, discount: null } : p
+    ));
+
+    // Reset form if this discount was being edited
+    if (discountForm.productId === productId) {
+      setDiscountForm({ productId: null, percentage: "", endDate: "", isUpdate: false });
+    }
+
   } catch (error) {
-    console.error("Error fetching admin products:", error);
+    console.error("Error removing discount:", error);
+    alert(error.response?.data?.message || "Failed to remove discount");
   }
 };
 
@@ -194,11 +276,12 @@ const AdminProducts = () => {
             <tr key={p.id}>
               <td className="fw-semibold">{p.name}</td>
               <td>
-                {new Intl.NumberFormat("en-IN", {
-                  style: "currency",
-                  currency: "INR",
-                  maximumFractionDigits: 2,
-                }).format(p.price)}
+                ₹{p.price.toFixed(2)}
+                {p.discount && p.discount.active && (
+                  <div className="text-success small">
+                    (-{p.discount.percentage}%)
+                  </div>
+                )}
               </td>
               <td>{p.stock}</td>
               <td>
@@ -207,34 +290,82 @@ const AdminProducts = () => {
                     src={`http://localhost:8080/${p.imageUrl}`}
                     alt={p.name}
                     className="rounded shadow-sm border"
-                    style={{
-                      width: "60px",
-                      height: "60px",
-                      objectFit: "cover",
-                    }}
+                    style={{ width: "60px", height: "60px", objectFit: "cover" }}
                   />
                 )}
               </td>
               <td>
-                <div className="d-flex justify-content-start gap-2">
-                  <button
-                    className="btn btn-sm"
-                    style={{ backgroundColor: "#FFA500", color: "white" }}
-                    onClick={() => startEdit(p)}
-                  >
-                    ✏️ Edit
-                  </button>
-                  <button
-                    className="btn btn-sm btn-danger"
-                    onClick={() => deleteProduct(p.id)}
-                  >
-                    🗑 Delete
-                  </button>
+                <div className="d-flex flex-column gap-2">
+                  <div className="d-flex gap-2">
+                    <button
+                      className="btn btn-sm"
+                      style={{ backgroundColor: "#FFA500", color: "white" }}
+                      onClick={() => startEdit(p)}
+                    >
+                      ✏️ Edit
+                    </button>
+                    <button
+                      className="btn btn-sm btn-danger"
+                      onClick={() => deleteProduct(p.id)}
+                    >
+                      🗑 Delete
+                    </button>
+                  </div>
+
+                  {/* Discount section */}
+                  {discountForm.productId === p.id ? (
+                    <div className="d-flex gap-2 align-items-center mt-2">
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        placeholder="% Discount"
+                        className="form-control form-control-sm"
+                        style={{ width: "80px" }}
+                        value={discountForm.percentage}
+                        onChange={(e) => setDiscountForm({ ...discountForm, percentage: e.target.value })}
+                      />
+                      <input
+                        type="date"
+                        className="form-control form-control-sm"
+                        style={{ width: "150px" }}
+                        value={discountForm.endDate}
+                        onChange={(e) => setDiscountForm({ ...discountForm, endDate: e.target.value })}
+                      />
+                      <button className="btn btn-sm btn-success" onClick={saveDiscount}>
+                        💾 Save
+                      </button>
+                      <button
+                        className="btn btn-sm btn-danger"
+                        onClick={() => handleRemoveDiscount(p.id)}
+                      >
+                        🗑 Remove
+                      </button>
+
+                      <button
+                        className="btn btn-sm btn-secondary"
+                        onClick={() => setDiscountForm({ productId: null, percentage: "", endDate: "", isUpdate: false })}
+                      >
+                        ❌ Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      className="btn btn-sm btn-outline-primary mt-2"
+                      onClick={() => startDiscount(p)}
+                    >
+                      {p.discount?.active ? "✏️ Update Discount" : "➕ Add Discount"}
+                    </button>
+                  )}
+
+
+
                 </div>
               </td>
             </tr>
           ))}
         </tbody>
+
       </table>
     </div>
   );

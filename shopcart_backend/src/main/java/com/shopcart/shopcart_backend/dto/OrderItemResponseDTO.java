@@ -14,16 +14,16 @@ public class OrderItemResponseDTO {
     private double price;
     private int quantity;
     private double total;
-    private String status; // ✅ add status
+    private String status;
 
     public static OrderItemResponseDTO from(OrderItem item) {
         return OrderItemResponseDTO.builder()
                 .id(item.getId())
                 .productName(item.getProduct().getName())
-                .price(item.getPrice())
+                .price(item.getProduct().getPrice())
                 .quantity(item.getQuantity())
-                .total(item.getQuantity() * item.getPrice())
-                .status(item.getStatus().name()) // ✅ convert enum to String
+                .total(item.getTotal())
+                .status(item.getStatus() != null ? item.getStatus().name() : "PLACED")
                 .build();
     }
 }

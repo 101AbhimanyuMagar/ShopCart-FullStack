@@ -17,25 +17,63 @@ const Orders = () => {
   const fetchedOnce = useRef(false);
 
   const fetchOrders = useCallback(async () => {
-  try {
-    if (!token) {
-      toast.error("Please login first.");
-      return;
+    try {
+      if (!token) {
+        toast.error("Please login first.");
+        return;
+      }
+
+      const res = await axios.get("http://localhost:8080/api/orders", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      console.log("Orders fetched from backend:", res.data); // ✅ log all data
+          // ✅ Sort latest orders first
+    const sortedOrders = res.data.sort(
+      (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+    );
+      setOrders(sortedOrders);
+    } catch (err) {
+      console.error("Order fetch error:", err);
+      toast.error("Failed to fetch orders.");
+    } finally {
+      setLoading(false);
     }
+  }, [token]);
 
-    const res = await axios.get("http://localhost:8080/api/orders", {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+  const handleCancelOrderItem = async (orderId, itemId) => {
+    if (!window.confirm("Cancel this product from your order?")) return;
+    try {
+      await axios.put(
+        `http://localhost:8080/api/orders/${orderId}/items/${itemId}/cancel`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      toast.success("Product cancelled successfully!");
+      fetchOrders();
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data || "Failed to cancel this item.");
+    }
+  };
 
-    console.log("Orders fetched from backend:", res.data); // ✅ log all data
-    setOrders(res.data);
-  } catch (err) {
-    console.error("Order fetch error:", err);
-    toast.error("Failed to fetch orders.");
-  } finally {
-    setLoading(false);
-  }
-}, [token]);
+  const handleDownloadInvoice = async (orderId) => {
+    try {
+      const res = await axios.get(`http://localhost:8080/api/orders/${orderId}/invoice`, {
+        headers: { Authorization: `Bearer ${token}` },
+        responseType: "blob"
+      });
+
+      const blob = new Blob([res.data], { type: "application/pdf" });
+      const link = document.createElement("a");
+      link.href = window.URL.createObjectURL(blob);
+      link.download = `invoice_${orderId}.pdf`;
+      link.click();
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to download invoice.");
+    }
+  };
 
 
   useEffect(() => {
@@ -66,16 +104,28 @@ const Orders = () => {
     <div className="container mt-5">
       <h2 className="mb-4">📦 Your Orders</h2>
 
+
+
       {orders.length === 0 ? (
         <p>You haven't placed any orders yet.</p>
       ) : (
         orders.map((order) => (
           <div key={order.id} className="card mb-4 shadow border-0 rounded-3">
-            <div className="card-header bg-light fw-bold">
-              Order #{order.id}
-              <div className="small text-muted">
-                {new Date(order.createdAt).toLocaleString()}
+            <div className="card-header bg-light fw-bold d-flex justify-content-between align-items-center">
+              <div>
+                <div>Order #{order.id}</div>
+                <div className="small text-muted">
+                  {new Date(order.createdAt).toLocaleString()}
+                </div>
               </div>
+
+              {/* ✅ Download Invoice button in top-right corner */}
+              <button
+                className="btn btn-sm btn-outline-primary d-flex align-items-center gap-1"
+                onClick={() => handleDownloadInvoice(order.id)}
+              >
+                <i className="bi bi-file-earmark-pdf"></i> Download Invoice
+              </button>
             </div>
 
             <div className="card-body">
@@ -89,7 +139,7 @@ const Orders = () => {
                     key={item.id}
                     className="border rounded-3 p-3 mb-4 shadow-sm bg-white"
                   >
-                    <div className="d-flex justify-content-between align-items-center">
+                    <div className="d-flex justify-content-between align-items-center mb-2">
                       <div>
                         <h6 className="fw-bold mb-1">{item.productName}</h6>
                         <p className="mb-1">
@@ -97,21 +147,20 @@ const Orders = () => {
                         </p>
                       </div>
                       <span
-                        className={`badge ${
-                          isCancelled
-                            ? "bg-danger"
-                            : statusLower === "delivered"
+                        className={`badge ${isCancelled
+                          ? "bg-danger"
+                          : statusLower === "delivered"
                             ? "bg-success"
                             : "bg-warning text-dark"
-                        }`}
+                          }`}
                       >
                         {capitalize(item.status)}
                       </span>
                     </div>
 
+                    {/* Progress bar section (unchanged) */}
                     {!isCancelled && (
-                      <div className="position-relative my-4" style={{ height: 70, overflow: "visible" }}>
-                        {/* Base gray line */}
+                      <div className="position-relative my-4" style={{ height: 70 }}>
                         <div
                           style={{
                             position: "absolute",
@@ -122,11 +171,9 @@ const Orders = () => {
                             height: 6,
                             backgroundColor: "#e0e0e0",
                             borderRadius: 4,
-                            zIndex: 0,
                           }}
                         ></div>
 
-                        {/* Animated progress bar */}
                         <motion.div
                           key={item.id + "-" + item.status}
                           initial={{ width: 0 }}
@@ -135,10 +182,10 @@ const Orders = () => {
                               currentStep === 0
                                 ? "33%"
                                 : currentStep === 1
-                                ? "66%"
-                                : currentStep === 2
-                                ? "100%"
-                                : "0%",
+                                  ? "66%"
+                                  : currentStep === 2
+                                    ? "100%"
+                                    : "0%",
                           }}
                           transition={{ duration: 1.2, ease: "easeInOut" }}
                           style={{
@@ -147,32 +194,36 @@ const Orders = () => {
                             left: 0,
                             transform: "translateY(-50%)",
                             height: 6,
-                            background: "linear-gradient(90deg, #ff6f00, #ff9800, #ffc107)",
+                            background:
+                              "linear-gradient(90deg, #ff6f00, #ff9800, #ffc107)",
                             borderRadius: 4,
-                            zIndex: 1,
                           }}
                         ></motion.div>
 
-                        {/* Step icons */}
                         <div className="d-flex justify-content-between align-items-center position-relative mt-3">
                           {statusSteps.map((step, index) => (
-                            <div key={index} className="text-center" style={{ width: "33%", zIndex: 2 }}>
+                            <div key={index} className="text-center" style={{ width: "33%" }}>
                               <motion.div
-                                animate={{ scale: index === currentStep ? [1, 1.3, 1] : 1 }}
+                                animate={{
+                                  scale: index === currentStep ? [1, 1.3, 1] : 1,
+                                }}
                                 transition={{ duration: 0.5 }}
-                                className={`rounded-circle d-flex align-items-center justify-content-center mx-auto mb-2 ${
-                                  index <= currentStep ? "bg-success text-white" : "bg-secondary text-light"
-                                }`}
+                                className={`rounded-circle d-flex align-items-center justify-content-center mx-auto mb-2 ${index <= currentStep
+                                  ? "bg-success text-white"
+                                  : "bg-secondary text-light"
+                                  }`}
                                 style={{
                                   width: 40,
                                   height: 40,
                                   fontSize: 20,
-                                  boxShadow: index <= currentStep ? "0 0 10px rgba(0,128,0,0.4)" : "none",
                                 }}
                               >
                                 {step.icon}
                               </motion.div>
-                              <small className={`fw-semibold ${index <= currentStep ? "text-success" : "text-muted"}`}>
+                              <small
+                                className={`fw-semibold ${index <= currentStep ? "text-success" : "text-muted"
+                                  }`}
+                              >
                                 {step.label}
                               </small>
                             </div>
@@ -181,13 +232,33 @@ const Orders = () => {
                       </div>
                     )}
 
+                    {/* Cancel Button */}
+                    <div className="text-end mt-3">
+                      {isCancelled ? (
+                        <button className="btn btn-secondary btn-sm" disabled>
+                          ❌ Order Cancelled
+                        </button>
+                      ) : statusLower === "placed" ? (
+                        <button
+                          className="btn btn-outline-danger btn-sm"
+                          onClick={() => handleCancelOrderItem(order.id, item.id)}
+                        >
+                          ❌ Cancel Order
+                        </button>
+                      ) : (
+                        <button className="btn btn-secondary btn-sm" disabled>
+                          {capitalize(item.status)} — Cannot Cancel
+                        </button>
+                      )}
+                    </div>
                   </div>
                 );
               })}
 
-              <p className="fw-bold text-end fs-5 mb-0">
-                Total: ₹{order.totalAmount}
-              </p>
+              {/* ✅ Total amount section */}
+              <div className="d-flex justify-content-end align-items-center mt-3">
+                <h5 className="fw-bold mb-0">Total: ₹{order.totalAmount}</h5>
+              </div>
             </div>
           </div>
         ))

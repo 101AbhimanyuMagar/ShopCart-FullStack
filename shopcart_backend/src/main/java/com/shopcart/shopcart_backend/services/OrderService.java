@@ -15,5 +15,6 @@ public interface OrderService {
     void updateOrderStatus(Long orderId, OrderStatus status);
     void updateOrderItemStatus(Long itemId, OrderStatus status);
     List<OrderResponseDTO> getOrdersForAdmin(Long adminId);
-
+    void cancelOrderItem(String email, Long orderId, Long orderItemId);
+    byte[] generateInvoicePdf(Long orderId);
 }

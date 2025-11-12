@@ -31,10 +31,12 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
 
+  const isAdmin = role === "ADMIN";
   const isSuperAdmin = role === "SUPER_ADMIN";
 
+
   useEffect(() => {
-    if (!isSuperAdmin) return;
+    if (!isAdmin && !isSuperAdmin) return;
     (async () => {
       try {
         const res = await axios.get("http://localhost:8080/api/admin/metrics", {
@@ -47,7 +49,8 @@ export default function AdminDashboard() {
         setLoading(false);
       }
     })();
-  }, [isSuperAdmin, token]);
+  }, [token, isAdmin, isSuperAdmin]);
+
 
   const {
     totalUsers = 0,
@@ -60,11 +63,11 @@ export default function AdminDashboard() {
   } = data || {};
 
   const statusItems = useMemo(() => [
-  { label: "Placed", value: placedOrders, color: BLUE },
-  { label: "Shipped", value: shippedOrders, color: ORANGE },
-  { label: "Delivered", value: deliveredOrders, color: GREEN },
-  { label: "Cancelled", value: cancelledOrders, color: RED },
-], [placedOrders, shippedOrders, deliveredOrders, cancelledOrders]);
+    { label: "Placed", value: placedOrders, color: BLUE },
+    { label: "Shipped", value: shippedOrders, color: ORANGE },
+    { label: "Delivered", value: deliveredOrders, color: GREEN },
+    { label: "Cancelled", value: cancelledOrders, color: RED },
+  ], [placedOrders, shippedOrders, deliveredOrders, cancelledOrders]);
 
 
   const statusTotal = Math.max(
@@ -72,20 +75,20 @@ export default function AdminDashboard() {
     statusItems.reduce((a, b) => a + (Number.isFinite(b.value) ? b.value : 0), 0)
   );
 
-const doughnutData = useMemo(
-  () => ({
-    labels: statusItems.map((s) => s.label),
-    datasets: [
-      {
-        label: "Orders",
-        data: statusItems.map((s) => s.value || 0),
-        backgroundColor: statusItems.map((s) => s.color),
-        borderWidth: 0,
-      },
-    ],
-  }),
-  [statusItems]
-);
+  const doughnutData = useMemo(
+    () => ({
+      labels: statusItems.map((s) => s.label),
+      datasets: [
+        {
+          label: "Orders",
+          data: statusItems.map((s) => s.value || 0),
+          backgroundColor: statusItems.map((s) => s.color),
+          borderWidth: 0,
+        },
+      ],
+    }),
+    [statusItems]
+  );
 
   const doughnutOptions = useMemo(
     () => ({
@@ -109,20 +112,20 @@ const doughnutData = useMemo(
     [statusTotal]
   );
 
-const barData = useMemo(
-  () => ({
-    labels: statusItems.map((s) => s.label),
-    datasets: [
-      {
-        label: "Orders",
-        data: statusItems.map((s) => s.value || 0),
-        backgroundColor: statusItems.map((s) => s.color),
-        borderRadius: 6,
-      },
-    ],
-  }),
-  [statusItems]
-);
+  const barData = useMemo(
+    () => ({
+      labels: statusItems.map((s) => s.label),
+      datasets: [
+        {
+          label: "Orders",
+          data: statusItems.map((s) => s.value || 0),
+          backgroundColor: statusItems.map((s) => s.color),
+          borderRadius: 6,
+        },
+      ],
+    }),
+    [statusItems]
+  );
 
 
   const barOptions = {
@@ -138,28 +141,36 @@ const barData = useMemo(
     },
   };
 
-  // Early returns come AFTER all hooks
-  if (!isSuperAdmin) {
-    return <div className="alert alert-warning">You are not authorized to view this page.</div>;
-  }
-  if (loading) {
-    return <div className="text-center">Loading...</div>;
-  }
-  if (err) {
-    return <div className="alert alert-danger">{err}</div>;
-  }
+// Early returns come AFTER all hooks
+if (!isAdmin && !isSuperAdmin) {
+  return <div className="alert alert-warning">You are not authorized to view this page.</div>;
+}
+if (loading) {
+  return <div className="text-center">Loading...</div>;
+}
+if (err) {
+  return <div className="alert alert-danger">{err}</div>;
+}
+
 
   return (
     <div className="container my-5">
       <div className="d-flex align-items-center justify-content-between mb-4">
-        <h2 className="fw-bold m-0">Super Admin Dashboard</h2>
-        <span className="badge rounded-pill" style={{ backgroundColor: ORANGE, color: "#111" }}>
-          Metrics
-        </span>
+        <h2 className="fw-bold m-0">
+  {isSuperAdmin ? "Super Admin Dashboard" : "Admin Dashboard"}
+</h2>
+
+<span className="badge rounded-pill" style={{ backgroundColor: ORANGE, color: "#111" }}>
+  {isSuperAdmin ? "System Metrics" : "Your Metrics"}
+</span>
+
+
+        
       </div>
 
       {/* KPI cards */}
-<div className="row g-4">
+      <div className="row g-4">
+       {isSuperAdmin && (
   <div className="col-12 col-md-4">
     <div className="card border-0 shadow-sm h-100">
       <div className="card-body d-flex justify-content-between align-items-center">
@@ -179,47 +190,49 @@ const barData = useMemo(
       </div>
     </div>
   </div>
+)}
 
-  <div className="col-12 col-md-4">
-    <div className="card border-0 shadow-sm h-100">
-      <div className="card-body d-flex justify-content-between align-items-center">
-        <div>
-          <div className="text-muted">Total Orders</div>
-          <div className="display-6 fw-bold">
-            <CountUp start={0} end={totalOrders} duration={2} separator="," />
+
+        <div className="col-12 col-md-4">
+          <div className="card border-0 shadow-sm h-100">
+            <div className="card-body d-flex justify-content-between align-items-center">
+              <div>
+                <div className="text-muted">Total Orders</div>
+                <div className="display-6 fw-bold">
+                  <CountUp start={0} end={totalOrders} duration={2} separator="," />
+                </div>
+              </div>
+              <div
+                className="rounded-circle d-flex align-items-center justify-content-center"
+                style={{ width: 56, height: 56, background: "#e8f0ff" }}
+                title="Orders"
+              >
+                <i className="bi bi-bag-check-fill" style={{ fontSize: 22, color: BLUE }} />
+              </div>
+            </div>
           </div>
         </div>
-        <div
-          className="rounded-circle d-flex align-items-center justify-content-center"
-          style={{ width: 56, height: 56, background: "#e8f0ff" }}
-          title="Orders"
-        >
-          <i className="bi bi-bag-check-fill" style={{ fontSize: 22, color: BLUE }} />
-        </div>
-      </div>
-    </div>
-  </div>
 
-  <div className="col-12 col-md-4">
-    <div className="card border-0 shadow-sm h-100">
-      <div className="card-body d-flex justify-content-between align-items-center">
-        <div>
-          <div className="text-muted">Total Revenue</div>
-          <div className="display-6 fw-bold" style={{ color: ORANGE }}>
-            ₹<CountUp start={0} end={totalRevenue} duration={2.5} separator="," decimals={2} />
+        <div className="col-12 col-md-4">
+          <div className="card border-0 shadow-sm h-100">
+            <div className="card-body d-flex justify-content-between align-items-center">
+              <div>
+                <div className="text-muted">Total Revenue</div>
+                <div className="display-6 fw-bold" style={{ color: ORANGE }}>
+                  ₹<CountUp start={0} end={totalRevenue} duration={2.5} separator="," decimals={2} />
+                </div>
+              </div>
+              <div
+                className="rounded-circle d-flex align-items-center justify-content-center"
+                style={{ width: 56, height: 56, background: "#fff3cd" }}
+                title="Revenue"
+              >
+                <i className="bi bi-currency-rupee" style={{ fontSize: 22, color: ORANGE }} />
+              </div>
+            </div>
           </div>
         </div>
-        <div
-          className="rounded-circle d-flex align-items-center justify-content-center"
-          style={{ width: 56, height: 56, background: "#fff3cd" }}
-          title="Revenue"
-        >
-          <i className="bi bi-currency-rupee" style={{ fontSize: 22, color: ORANGE }} />
-        </div>
       </div>
-    </div>
-  </div>
-</div>
 
       {/* Charts row */}
       <div className="row g-4 mt-1">

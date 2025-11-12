@@ -32,8 +32,14 @@ public class Order extends Auditable{
 
     private double totalAmount;
 
+
     @Embedded
     private ShippingAddress shippingAddress;
+
+    private String paymentMethod;  // e.g. "CARD", "UPI", "COD"
+private String transactionId;  // mock value like "TXN123456"
+private String paymentStatus;  // e.g. "SUCCESS", "FAILED", "PENDING"
+
 
 
     @ManyToOne

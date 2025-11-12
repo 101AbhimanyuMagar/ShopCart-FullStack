@@ -2,6 +2,7 @@ package com.shopcart.shopcart_backend.controllers;
 
 import com.shopcart.shopcart_backend.dto.ProductRequestDTO;
 import com.shopcart.shopcart_backend.dto.ProductResponseDTO;
+import com.shopcart.shopcart_backend.entities.Discount;
 import com.shopcart.shopcart_backend.entities.User;
 import com.shopcart.shopcart_backend.repositories.ProductRepository;
 import com.shopcart.shopcart_backend.repositories.UserRepository;
@@ -15,10 +16,12 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.format.annotation.DateTimeFormat;
 
 @RestController
 @RequestMapping("/api/products")
@@ -48,11 +51,18 @@ public class ProductController {
         return new ResponseEntity<>(productService.addProduct(productDTO, imageFile), HttpStatus.CREATED);
     }
 
-    // ✅ Get all products (Accessible to everyone)
-    @GetMapping
-    public ResponseEntity<List<ProductResponseDTO>> getAllProducts() {
-        return ResponseEntity.ok(productService.getAllProducts());
-    }
+// ✅ Get all products (Accessible to everyone)
+@GetMapping
+public ResponseEntity<List<ProductResponseDTO>> getAllProducts() {
+    List<ProductResponseDTO> products = productRepository.findAll()
+            .stream()
+            .map(ProductResponseDTO::from) // includes discounted price & discount info
+            .collect(Collectors.toList());
+
+    return ResponseEntity.ok(products);
+}
+
+
 
     // ✅ Get products added by the logged-in admin
     @PreAuthorize("hasRole('ADMIN')")
@@ -93,4 +103,40 @@ public class ProductController {
         productService.deleteProduct(id);
         return ResponseEntity.noContent().build(); // 204 No Content
     }
+
+
+    // ===============================
+// ✅ DISCOUNT MANAGEMENT (ADMIN)
+// ===============================
+
+// ✅ Add discount
+@PreAuthorize("hasRole('ADMIN')")
+@PostMapping("/{productId}/discount")
+public ResponseEntity<Discount> addDiscount(
+        @PathVariable Long productId,
+        @RequestParam double percentage,
+        @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd") Date startDate,
+        @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd") Date endDate) {
+    return ResponseEntity.ok(productService.addDiscount(productId, percentage, startDate, endDate));
+}
+
+// ✅ Update discount
+@PreAuthorize("hasRole('ADMIN')")
+@PutMapping("/{productId}/discount")
+public ResponseEntity<Discount> updateDiscount(
+        @PathVariable Long productId,
+        @RequestParam double percentage,
+        @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd") Date startDate,
+        @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd") Date endDate) {
+    return ResponseEntity.ok(productService.updateDiscount(productId, percentage, startDate, endDate));
+}
+
+// ✅ Remove discount
+@PreAuthorize("hasRole('ADMIN')")
+@DeleteMapping("/{productId}/discount")
+public ResponseEntity<Void> removeDiscount(@PathVariable Long productId) {
+    productService.removeDiscount(productId);
+    return ResponseEntity.noContent().build();
+}
+
 }

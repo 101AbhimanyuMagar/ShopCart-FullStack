@@ -18,6 +18,7 @@ import AdminPanel from './pages/AdminPanel';
 import AdminProducts from './pages/AdminProducts';
 import AdminOrders from './pages/AdminOrders';
 import AdminDashboard from './pages/AdminDashboard';
+import Checkout from './pages/Checkout';
 
 function App() {
   return (
@@ -56,6 +57,7 @@ function App() {
           {/* Public routes */}
           <Route path="/products" element={<Products />} />
           <Route path="/cart" element={<Cart />} />
+          <Route path="/checkout" element={<Checkout />} />
           <Route path="/orders" element={<Orders />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
