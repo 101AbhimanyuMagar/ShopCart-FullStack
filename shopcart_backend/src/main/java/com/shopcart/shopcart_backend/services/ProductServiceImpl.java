@@ -7,13 +7,21 @@ import com.shopcart.shopcart_backend.entities.Product;
 import com.shopcart.shopcart_backend.entities.Role;
 import com.shopcart.shopcart_backend.entities.User;
 import com.shopcart.shopcart_backend.exception.ResourceNotFoundException;
+import com.shopcart.shopcart_backend.repositories.CategoryRepository;
 import com.shopcart.shopcart_backend.repositories.DiscountRepository;
 import com.shopcart.shopcart_backend.repositories.ProductRepository;
 import com.shopcart.shopcart_backend.repositories.UserRepository;
 import com.shopcart.shopcart_backend.security.CustomUserDetails;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+
+
 import org.springframework.security.core.Authentication;
 
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -23,15 +31,20 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.transaction.annotation.Transactional;
 
+
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import com.shopcart.shopcart_backend.entities.Category;
+
 import java.util.stream.Collectors;
 
 @Service
@@ -44,38 +57,51 @@ public class ProductServiceImpl implements ProductService {
     private UserRepository userRepository;
     @Autowired
     private DiscountRepository discountRepository;
-
+    @Autowired 
+    private CategoryRepository categoryRepository;
+    
     @Override
-    public ProductResponseDTO addProduct(ProductRequestDTO request, MultipartFile image) throws IOException {
-        String email = SecurityContextHolder.getContext().getAuthentication().getName();
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+public ProductResponseDTO addProduct(ProductRequestDTO request, MultipartFile image) throws IOException {
+    String email = SecurityContextHolder.getContext().getAuthentication().getName();
+    User user = userRepository.findByEmail(email)
+            .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        if (user.getRole() != Role.ADMIN) {
-            throw new AccessDeniedException("Only admin users can add products");
-        }
-
-        String imageUrl = null;
-        if (image != null && !image.isEmpty()) {
-            String fileName = UUID.randomUUID() + "_" + StringUtils.cleanPath(image.getOriginalFilename());
-            Path uploadPath = Paths.get(uploadDir); // from application.properties
-            Files.createDirectories(uploadPath);
-            Files.copy(image.getInputStream(), uploadPath.resolve(fileName), StandardCopyOption.REPLACE_EXISTING);
-            imageUrl = "product-images/" + fileName;
-        }
-
-        Product product = Product.builder()
-                .name(request.getName())
-                .description(request.getDescription())
-                .price(request.getPrice())
-                .stock(request.getStock())
-                .imageUrl(imageUrl)
-                .addedBy(user)
-                .build();
-
-        Product saved = productRepository.save(product);
-        return ProductResponseDTO.from(saved);
+    if (user.getRole() != Role.ADMIN) {
+        throw new AccessDeniedException("Only admin users can add products");
     }
+
+    // ✅ Fetch and set category if provided
+    Category category = null;
+    if (request.getCategoryId() != null) {
+        category = categoryRepository.findById(request.getCategoryId())
+                .orElseThrow(() -> new ResourceNotFoundException("Category not found"));
+    }
+
+    // ✅ Handle image upload
+    String imageUrl = null;
+    if (image != null && !image.isEmpty()) {
+        String fileName = UUID.randomUUID() + "_" + StringUtils.cleanPath(image.getOriginalFilename());
+        Path uploadPath = Paths.get(uploadDir);
+        Files.createDirectories(uploadPath);
+        Files.copy(image.getInputStream(), uploadPath.resolve(fileName), StandardCopyOption.REPLACE_EXISTING);
+        imageUrl = "product-images/" + fileName;
+    }
+
+    // ✅ Include category when building product
+    Product product = Product.builder()
+            .name(request.getName())
+            .description(request.getDescription())
+            .price(request.getPrice())
+            .stock(request.getStock())
+            .imageUrl(imageUrl)
+            .addedBy(user)
+            .category(category) // <-- 🔥 IMPORTANT LINE
+            .build();
+
+    Product saved = productRepository.save(product);
+    return ProductResponseDTO.from(saved);
+}
+
 
     @Override
     public List<ProductResponseDTO> getAllProducts() {
@@ -109,47 +135,54 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     public ProductResponseDTO updateProduct(Long id, ProductRequestDTO request, MultipartFile imageFile)
-            throws IOException {
-        Product existing = productRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Product not found with ID: " + id));
+        throws IOException {
 
-        Long currentAdminId = getCurrentUserId();
-        if (!existing.getAddedBy().getId().equals(currentAdminId)) {
-            throw new AccessDeniedException("You are not authorized to update this product.");
-        }
+    Product existing = productRepository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException("Product not found with ID: " + id));
 
-        existing.setName(request.getName());
-        existing.setDescription(request.getDescription());
-        existing.setPrice(request.getPrice());
-        existing.setStock(request.getStock());
-
-        if (imageFile != null && !imageFile.isEmpty()) {
-            // Delete old image
-            if (existing.getImageUrl() != null) {
-                Path oldImagePath = Paths.get(uploadDir, existing.getImageUrl().replace("product-images/", ""));
-                Files.deleteIfExists(oldImagePath);
-            }
-
-            // Save new image
-            String originalFilename = imageFile.getOriginalFilename() != null ? imageFile.getOriginalFilename()
-                    : "unknown.jpg";
-            String cleanName = StringUtils.cleanPath(originalFilename);
-            String fileName = UUID.randomUUID() + "_" + cleanName;
-
-            Path uploadPath = Paths.get(uploadDir);
-            if (!Files.exists(uploadPath)) {
-                Files.createDirectories(uploadPath);
-            }
-
-            Files.copy(imageFile.getInputStream(), uploadPath.resolve(fileName), StandardCopyOption.REPLACE_EXISTING);
-
-            // Store relative path in DB
-            existing.setImageUrl("product-images/" + fileName);
-        }
-
-        Product updated = productRepository.save(existing);
-        return ProductResponseDTO.from(updated);
+    Long currentAdminId = getCurrentUserId();
+    if (!existing.getAddedBy().getId().equals(currentAdminId)) {
+        throw new AccessDeniedException("You are not authorized to update this product.");
     }
+
+    existing.setName(request.getName());
+    existing.setDescription(request.getDescription());
+    existing.setPrice(request.getPrice());
+    existing.setStock(request.getStock());
+
+    // ✅ handle category update (if provided)
+    if (request.getCategoryId() != null) {
+        Category category = categoryRepository.findById(request.getCategoryId())
+                .orElseThrow(() -> new ResourceNotFoundException("Category not found with ID: " + request.getCategoryId()));
+        existing.setCategory(category);
+    }
+
+    // ✅ handle image replacement
+    if (imageFile != null && !imageFile.isEmpty()) {
+        // delete old image
+        if (existing.getImageUrl() != null) {
+            Path oldImagePath = Paths.get(uploadDir, existing.getImageUrl().replace("product-images/", ""));
+            Files.deleteIfExists(oldImagePath);
+        }
+
+        // save new image
+        String originalFilename = imageFile.getOriginalFilename() != null ? imageFile.getOriginalFilename() : "unknown.jpg";
+        String cleanName = StringUtils.cleanPath(originalFilename);
+        String fileName = UUID.randomUUID() + "_" + cleanName;
+
+        Path uploadPath = Paths.get(uploadDir);
+        if (!Files.exists(uploadPath)) {
+            Files.createDirectories(uploadPath);
+        }
+
+        Files.copy(imageFile.getInputStream(), uploadPath.resolve(fileName), StandardCopyOption.REPLACE_EXISTING);
+        existing.setImageUrl("product-images/" + fileName);
+    }
+
+    Product updated = productRepository.save(existing);
+    return ProductResponseDTO.from(updated);
+}
+
 
     private Long getCurrentUserId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -233,6 +266,45 @@ public void removeDiscount(Long productId) {
                 return price - (price * d.getPercentage() / 100);
             })
             .orElse(product.getPrice());
+}
+@Override
+public List<ProductResponseDTO> getProducts(Long categoryId, String search, String sortBy, int page, int size) {
+
+    Pageable pageable = PageRequest.of(page, size);
+
+    // Sort logic
+    if ("priceAsc".equalsIgnoreCase(sortBy)) {
+        pageable = PageRequest.of(page, size, Sort.by("price").ascending());
+    } else if ("priceDesc".equalsIgnoreCase(sortBy)) {
+        pageable = PageRequest.of(page, size, Sort.by("price").descending());
+    } else if ("nameAsc".equalsIgnoreCase(sortBy)) {
+        pageable = PageRequest.of(page, size, Sort.by("name").ascending());
+    } else if ("nameDesc".equalsIgnoreCase(sortBy)) {
+        pageable = PageRequest.of(page, size, Sort.by("name").descending());
+    }
+
+    Page<Product> productPage;
+
+    if (categoryId != null && search != null && !search.isEmpty()) {
+        // ✅ Filter by category + search
+        productPage = productRepository.findByCategoryIdAndNameContainingIgnoreCase(categoryId, search, pageable);
+    } else if (categoryId != null) {
+        // ✅ Filter by category only
+        productPage = productRepository.findByCategoryId(categoryId, pageable);
+    } else if (search != null && !search.isEmpty()) {
+        // ✅ Search by name only
+        productPage = productRepository.findByNameContainingIgnoreCase(search, pageable);
+    } else {
+        // ✅ All products
+        productPage = productRepository.findAll(pageable);
+    }
+
+    // Convert to DTO
+    return productPage.getContent()
+        .stream()
+        .map(ProductResponseDTO::from)
+        .toList();
+
 }
 
 

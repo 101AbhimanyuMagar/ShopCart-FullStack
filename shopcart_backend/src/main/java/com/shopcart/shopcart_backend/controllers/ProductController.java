@@ -3,6 +3,7 @@ package com.shopcart.shopcart_backend.controllers;
 import com.shopcart.shopcart_backend.dto.ProductRequestDTO;
 import com.shopcart.shopcart_backend.dto.ProductResponseDTO;
 import com.shopcart.shopcart_backend.entities.Discount;
+import com.shopcart.shopcart_backend.entities.Product;
 import com.shopcart.shopcart_backend.entities.User;
 import com.shopcart.shopcart_backend.repositories.ProductRepository;
 import com.shopcart.shopcart_backend.repositories.UserRepository;
@@ -139,4 +140,15 @@ public ResponseEntity<Void> removeDiscount(@PathVariable Long productId) {
     return ResponseEntity.noContent().build();
 }
 
+// 🟢 2. Get filtered/sorted/paginated products
+    @GetMapping("/filter")
+    public List<ProductResponseDTO> getProducts(
+            @RequestParam(required = false) Long categoryId,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String sortBy,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
+        return productService.getProducts(categoryId, search, sortBy, page, size);
+    }
 }

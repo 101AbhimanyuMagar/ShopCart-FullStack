@@ -15,7 +15,8 @@ function Navbar() {
   };
 
   return (
-    <nav className="navbar navbar-expand-lg navbar-dark custom-navbar px-4">
+<nav className="navbar navbar-expand-lg navbar-light custom-navbar px-4">
+
       {/* Logo */}
       <NavLink className="navbar-brand fw-bold" to="/">
         <img src="/images/shopcart_logo.png" alt="Logo" className="navbar-logo" />
@@ -24,21 +25,22 @@ function Navbar() {
 
       {/* Mobile Toggle */}
       <button
-        className="navbar-toggler"
-        type="button"
-        data-bs-toggle="collapse"
-        data-bs-target="#navbarNav"
-        aria-controls="navbarNav"
-        aria-expanded="false"
-        aria-label="Toggle navigation"
-      >
-        <span className="navbar-toggler-icon"></span>
-      </button>
+  className="navbar-toggler"
+  type="button"
+  data-bs-toggle="collapse"
+  data-bs-target="#navbarNav"
+  aria-controls="navbarNav"
+  aria-expanded="false"
+  aria-label="Toggle navigation"
+>
+  <span className="navbar-toggler-icon"></span>
+</button>
+
 
       {/* Navbar Content */}
       <div className="collapse navbar-collapse" id="navbarNav">
         {/* Search in center */}
-        <div className="mx-auto nav-search">
+        {/* <div className="mx-auto nav-search">
           <input
             type="text"
             placeholder="Find product"
@@ -49,7 +51,7 @@ function Navbar() {
           <button>
             <i className="bi bi-search"></i>
           </button>
-        </div>
+        </div> */}
 
         {/* Menu/Icons on right */}
         <ul className="navbar-nav ms-auto align-items-center">
@@ -111,8 +113,14 @@ function Navbar() {
                       Admin Panel
                     </NavLink>
                   </li>
+                  <li className="nav-item">
+                    <NavLink className="nav-link admin-link" to="/admin/categories">
+                      Manage Categories
+                    </NavLink>
+                  </li>
                 </>
               )}
+
 
               {/* Logout button for all logged-in users */}
               <li className="nav-item">

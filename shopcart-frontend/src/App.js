@@ -19,12 +19,13 @@ import AdminProducts from './pages/AdminProducts';
 import AdminOrders from './pages/AdminOrders';
 import AdminDashboard from './pages/AdminDashboard';
 import Checkout from './pages/Checkout';
+import CategoryManager from './pages/CategoryManager';
 
 function App() {
   return (
     <>
       <Navbar />
-      <div className="container mt-4">
+      <div >
         <Routes>
           <Route path="/" element={<Home />} />
 
@@ -53,6 +54,7 @@ function App() {
               </AdminRoute>
             }
           />
+<Route path="/admin/categories" element={<CategoryManager />} />
 
           {/* Public routes */}
           <Route path="/products" element={<Products />} />

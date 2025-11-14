@@ -14,5 +14,6 @@ public class ProductRequestDTO {
     private double price;
     private int stock;
     private String imageUrl;
+    private Long categoryId;
 }
 

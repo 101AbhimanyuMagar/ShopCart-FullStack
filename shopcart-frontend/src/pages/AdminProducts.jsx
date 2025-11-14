@@ -5,9 +5,18 @@ import { AuthContext } from "../context/AuthContext";
 const AdminProducts = () => {
   const { token, role } = useContext(AuthContext);
   const [products, setProducts] = useState([]);
-  const [form, setForm] = useState({ name: "", description: "", price: "", stock: "" });
+  const [form, setForm] = useState({
+    name: "",
+    description: "",
+    price: "",
+    stock: "",
+    categoryId: ""
+  });
+
   const [imageFile, setImageFile] = useState(null);
   const [editingId, setEditingId] = useState(null);
+  const [categories, setCategories] = useState([]);
+
 
   // ✅ fetchProducts defined normally
   const fetchProducts = async () => {
@@ -82,34 +91,49 @@ const AdminProducts = () => {
     }
   };
 
-
-
- const handleRemoveDiscount = async (productId) => {
-  if (!window.confirm("Remove discount from this product?")) return;
-
-  try {
-    await axios.delete(
-      `http://localhost:8080/api/products/${productId}/discount`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-
-    alert("Discount removed!");
-
-    // ✅ Update products state locally instead of waiting for refetch
-    setProducts(products.map(p => 
-      p.id === productId ? { ...p, discount: null } : p
-    ));
-
-    // Reset form if this discount was being edited
-    if (discountForm.productId === productId) {
-      setDiscountForm({ productId: null, percentage: "", endDate: "", isUpdate: false });
+  const fetchCategories = async () => {
+    try {
+      const res = await axios.get("http://localhost:8080/api/categories", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setCategories(res.data);
+    } catch (error) {
+      console.error("Error fetching categories:", error);
     }
+  };
 
-  } catch (error) {
-    console.error("Error removing discount:", error);
-    alert(error.response?.data?.message || "Failed to remove discount");
-  }
-};
+  useEffect(() => {
+    fetchProducts();
+    fetchCategories();
+  }, []);
+
+
+  const handleRemoveDiscount = async (productId) => {
+    if (!window.confirm("Remove discount from this product?")) return;
+
+    try {
+      await axios.delete(
+        `http://localhost:8080/api/products/${productId}/discount`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      alert("Discount removed!");
+
+      // ✅ Update products state locally instead of waiting for refetch
+      setProducts(products.map(p =>
+        p.id === productId ? { ...p, discount: null } : p
+      ));
+
+      // Reset form if this discount was being edited
+      if (discountForm.productId === productId) {
+        setDiscountForm({ productId: null, percentage: "", endDate: "", isUpdate: false });
+      }
+
+    } catch (error) {
+      console.error("Error removing discount:", error);
+      alert(error.response?.data?.message || "Failed to remove discount");
+    }
+  };
 
 
   const handleChange = (e) => {
@@ -125,9 +149,11 @@ const AdminProducts = () => {
     setForm({
       name: product.name,
       description: product.description,
-      price: product.price,
+      price: product.originalPrice || product.price,
       stock: product.stock,
+      categoryId: product.category?.id || ""
     });
+
     setImageFile(null);
   };
 
@@ -147,6 +173,7 @@ const AdminProducts = () => {
         description: form.description,
         price: parseFloat(form.price),
         stock: parseInt(form.stock),
+        categoryId: form.categoryId ? parseInt(form.categoryId) : null
       })], { type: "application/json" })
     );
 
@@ -228,15 +255,35 @@ const AdminProducts = () => {
           </div>
           <div className="col-md-6">
             <input
-              className="form-control"
-              type="number"
-              placeholder="Stock"
-              name="stock"
-              value={form.stock}
-              onChange={handleChange}
-              required
-            />
+  className="form-control"
+  type="number"
+  placeholder="Stock"
+  name="stock"
+  min="0" // ✅ visually blocks negative numbers
+  value={form.stock}
+  onChange={(e) => {
+    const value = Math.max(0, e.target.value); // ✅ logic-level protection
+    setForm({ ...form, stock: value });
+  }}
+  required
+/>
+
           </div>
+          <div className="col-md-6 mt-3">
+            <select
+              name="categoryId"
+              value={form.categoryId}
+              onChange={(e) => setForm({ ...form, categoryId: e.target.value })}
+            >
+              <option value="">Select Category</option>
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  {cat.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
         </div>
         <input
           className="form-control mt-3"
@@ -265,6 +312,7 @@ const AdminProducts = () => {
         <thead style={{ backgroundColor: "#FFA500", color: "white" }}>
           <tr>
             <th>Name</th>
+            <th>Category</th>
             <th>Price (₹)</th>
             <th>Stock</th>
             <th>Image</th>
@@ -275,14 +323,19 @@ const AdminProducts = () => {
           {products.map((p) => (
             <tr key={p.id}>
               <td className="fw-semibold">{p.name}</td>
+              <td>{p.category?.name || "—"}</td>
               <td>
-                ₹{p.price.toFixed(2)}
-                {p.discount && p.discount.active && (
-                  <div className="text-success small">
-                    (-{p.discount.percentage}%)
-                  </div>
-                )}
-              </td>
+  ₹{p.price.toFixed(2)}
+  {p.discount && p.discount.active && (
+    <>
+      <div className="text-decoration-line-through text-muted small">
+        ₹{p.originalPrice.toFixed(2)}
+      </div>
+      <div className="text-success small">(-{p.discount.percentage}%)</div>
+    </>
+  )}
+</td>
+
               <td>{p.stock}</td>
               <td>
                 {p.imageUrl && (

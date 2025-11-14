@@ -32,4 +32,6 @@ public interface ProductService {
     void removeDiscount(Long productId);
 
     double getEffectivePrice(Product product);
+
+     List<ProductResponseDTO> getProducts(Long categoryId, String search, String sortBy, int page, int size);
 }
